@@ -1,0 +1,142 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+# Cancel superseded runs on the same ref, but never cancel a tagged release build.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_NET_RETRY: 10
+
+jobs:
+  # Fast gate: formatting, lints and tests on the host architecture. Runs once
+  # and blocks the (more expensive) release builds.
+  lint:
+    name: fmt + clippy + test
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libpipewire-0.3-dev libspa-0.2-dev libclang-dev pkg-config clang
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      # Caches ~/.cargo/registry and target/. `shared-key` keeps this job's cache
+      # distinct from the release jobs, which build a different profile.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: lint
+
+      - name: cargo fmt
+        run: cargo fmt --all --check
+
+      - name: cargo clippy
+        run: cargo clippy --all-targets --locked -- -D warnings
+
+      - name: cargo test
+        run: cargo test --locked
+
+  build:
+    name: build ${{ matrix.target }}
+    needs: lint
+    # Native runners per architecture. Building aarch64 natively avoids
+    # cross-compiling the bindgen-generated pipewire-sys bindings, which is
+    # fragile (it needs a full target sysroot plus libclang for the target).
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            runner: ubuntu-24.04
+            archive: x86_64
+          - target: aarch64-unknown-linux-gnu
+            runner: ubuntu-24.04-arm
+            archive: aarch64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # pipewire-sys builds via pkg-config + bindgen, so the headers and libclang
+      # are needed on the build host even though we only link at runtime.
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libpipewire-0.3-dev libspa-0.2-dev libclang-dev pkg-config clang
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          # Separate cache per target so the two architectures don't thrash each
+          # other's object files.
+          key: ${{ matrix.target }}
+          shared-key: release
+
+      - name: Build
+        run: cargo build --release --locked --target ${{ matrix.target }}
+
+      - name: Strip and stage
+        env:
+          TARGET: ${{ matrix.target }}
+          ARCHIVE: ${{ matrix.archive }}
+          VERSION: ${{ github.ref_type == 'tag' && github.ref_name || github.sha }}
+        run: |
+          set -euo pipefail
+          bin="target/${TARGET}/release/sendspin-sender"
+          out="stage/sendspin-sender-${VERSION}-${ARCHIVE}"
+          mkdir -p "$out"
+
+          strip --strip-all "$bin" -o "$out/sendspin-sender"
+
+          install -Dm644 dist/sendspin-sender.service "$out/sendspin-sender.service"
+          install -Dm644 README.md "$out/README.md"
+          install -Dm644 config.example.toml "$out/config.example.toml"
+
+          tar -C "$out" -czf "$out.tar.gz" .
+          ( cd "$out" && sha256sum "$(basename "$out.tar.gz")" > "$(basename "$out.tar.gz").sha256" )
+          echo "artifact=$out.tar.gz" >> "$GITHUB_ENV"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sendspin-sender-${{ matrix.archive }}
+          path: |
+            ${{ env.artifact }}
+            ${{ env.artifact }}.sha256
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    name: publish release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*.tar.gz*
+          generate_release_notes: true

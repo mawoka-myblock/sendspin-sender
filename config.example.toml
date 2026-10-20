@@ -1,0 +1,36 @@
+# sendspin-sender configuration.
+#
+# Copy to ~/.config/sendspin-sender/config.toml and edit.
+# Every key is optional; the defaults below are used when a key is absent.
+
+# WebSocket URL of the Sendspin server.
+# Leave empty to discover a server over mDNS (_sendspin-server._tcp).
+server_url = ""
+
+# Browse for the server over mDNS when server_url is empty.
+discover = true
+
+# Friendly device name shown by the server and desktop UIs.
+name = "Sendspin Sender"
+
+# Codec for the outgoing stream: "pcm" or "flac".
+codec = "pcm"
+
+# Capture format. 48000/2/16 gives the lowest-latency CD-quality path.
+sample_rate = 48000
+channels = 2
+bit_depth = 16
+
+# Chunk duration in milliseconds. Smaller is lower latency but more overhead.
+# 10 ms is a good balance; 5 ms is the protocol minimum and trims capture latency
+# further. This also sets the PipeWire scheduling quantum (rate * chunk_millis / 1000
+# frames), so the virtual sink and capture stream are scheduled at chunk granularity
+# instead of PipeWire's ~21 ms default.
+chunk_millis = 10
+
+# Report line-in signal presence so the server can autostart playback.
+line_sense = false
+
+# Name and description of the virtual sink that shows up in KDE's audio applet.
+sink_name = "sendspin-sender.sink"
+sink_description = "Sendspin"

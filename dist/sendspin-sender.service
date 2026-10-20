@@ -1,0 +1,19 @@
+[Unit]
+Description=Sendspin sender (PipeWire virtual sink to a Sendspin server)
+Documentation=https://github.com/Sendspin/spec
+# The virtual sink is created on PipeWire; wait for the user session to be usable.
+After=pipewire.service pipewire-pulse.service wireplumber.service
+Wants=pipewire.service
+
+[Service]
+Type=simple
+# Adjust the path if the binary is not in ~/.cargo/bin (e.g. /usr/local/bin/sendspin-sender).
+ExecStart=%h/.cargo/bin/sendspin-sender run
+# Configuration lives at ~/.config/sendspin-sender/config.toml by default.
+# Uncomment to point at a different file:
+# ExecStart=%h/.cargo/bin/sendspin-sender --config %h/.config/sendspin-sender/config.toml run
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=default.target
