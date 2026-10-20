@@ -6,6 +6,8 @@ I didn't thoroughly check it or even made architectural decisions. My work is th
 
 > I want to be able to stream low latency audio from my linux pc to my music assistant. Sendspin is the perfect protocol for that, but I couldn't find any sendspin senders that transmit audio from a pc to a sendspin server. Build this exact program in rust and preferrably with an easy integration into pipewire so it later shows as a normal output in the kde audio control center
 
+No support either, it just works for me and maybe someone finds this helpful.
+
 So this is WTFPL licensed.
 ## Actual README
 
