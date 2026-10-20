@@ -109,8 +109,12 @@ jobs:
           install -Dm644 README.md "$out/README.md"
           install -Dm644 config.example.toml "$out/config.example.toml"
 
-          tar -C "$out" -czf "$out.tar.gz" .
-          ( cd "$out" && sha256sum "$(basename "$out.tar.gz")" > "$(basename "$out.tar.gz").sha256" )
+          # Archive from the parent so the tarball is not nested inside the directory
+          # it is packing. The checksum must reference the bare filename *and* live
+          # next to the tarball so `sha256sum -c` works in the download directory.
+          name="$(basename "$out")"
+          tar -C "$(dirname "$out")" -czf "$out.tar.gz" "$name"
+          ( cd "$(dirname "$out")" && sha256sum "$name.tar.gz" > "$name.tar.gz.sha256" )
           echo "artifact=$out.tar.gz" >> "$GITHUB_ENV"
 
       - uses: actions/upload-artifact@v4

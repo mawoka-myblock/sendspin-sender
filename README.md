@@ -44,7 +44,7 @@ app ─▶ "Sendspin" virtual sink ─▶ capture ─▶ Sendspin source@v1 (Noi
 ## Requirements
 
 - Linux with a running PipeWire session (`pipewire` + `wireplumber`).
-- Rust toolchain to build (edition 2024; recent stable).
+- Rust toolchain to build (edition 2021; recent stable).
 
 ## Build
 
@@ -61,9 +61,12 @@ the systemd unit, the example config and this README:
 
 ```sh
 tar xzf sendspin-sender-vX.Y.Z-x86_64.tar.gz
+cd sendspin-sender-vX.Y.Z-x86_64
 install -Dm755 sendspin-sender ~/.cargo/bin/sendspin-sender
 install -Dm644 sendspin-sender.service ~/.config/systemd/user/sendspin-sender.service
 ```
+
+Each archive ships a matching `.sha256`; verify with `sha256sum -c`.
 
 The release binary dynamically links only `libpipewire-0.3.so.0` and glibc, so
 it runs on any distro with PipeWire installed.
